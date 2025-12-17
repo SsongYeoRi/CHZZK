@@ -1,0 +1,56 @@
+name: Chzzk Live Notifier
+
+on:
+  schedule:
+    # 5분마다 실행 (UTC 기준이므로 한국 시간과 차이가 있으나 주기는 동일)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # 수동 실행 버튼 활성화
+
+jobs:
+  check-live:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Check Chzzk Status and Notify
+        env:
+          # GitHub Secrets에 등록한 웹후크 URL
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # 알림을 받을 치지직 채널 ID를 여기에 입력하세요
+          CHZZK_CHANNEL_ID: "여기에_채널_ID_입력"
+        run: |
+          python - <<EOF
+          import requests
+          import os
+          import json
+
+          channel_id = os.environ['CHZZK_CHANNEL_ID']
+          webhook_url = os.environ['DISCORD_WEBHOOK_URL']
+          
+          # 치지직 API 호출
+          api_url = f"api.chzzk.naver.com{channel_id}/live-status"
+          response = requests.get(api_url).json()
+          
+          status = response.get('content', {}).get('status') # 'OPEN' 이면 방송 중
+          live_title = response.get('content', {}).get('liveTitle')
+          
+          # 중복 알림 방지를 위해 현재 상태를 파일로 저장하는 로직이 필요할 수 있습니다.
+          # 여기서는 간단히 'OPEN'일 때 디스코드로 메시지를 쏩니다.
+          if status == 'OPEN':
+              payload = {
+                  "content": f"📢 **치지직 방송 시작!**\n**제목**: {live_title}\nchzzk.naver.com{channel_id}"
+              }
+              requests.post(webhook_url, json=payload)
+              print("방송 중: 디스코드 알림 전송 완료")
+          else:
+              print("현재 방송 중이 아닙니다.")
+          EOF
